@@ -23,8 +23,8 @@ bool mgos_boot_dbg_setup(void) {
   struct mgos_uart_config cfg;
   mgos_uart_config_set_defaults(MGOS_DEBUG_UART, &cfg);
   cfg.baud_rate = MGOS_DEBUG_UART_BAUD_RATE;
-  cfg.dev.pins.tx = STM32_PIN_DEF('C', 6, 8);
-  cfg.dev.pins.rx = STM32_PIN_DEF('C', 7, 8);
+  cfg.dev.pins.tx = STM32_PIN('C', 6, 8);
+  cfg.dev.pins.rx = STM32_PIN('C', 7, 8);
   return mgos_uart_configure(MGOS_DEBUG_UART, &cfg);
 }
 
