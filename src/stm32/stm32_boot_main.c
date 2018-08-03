@@ -61,17 +61,17 @@ void mgos_boot_app(const struct mgos_boot_cfg *cfg, int slot) {
   const struct int_vectors *app_vectors =
       (const struct int_vectors *) cfg->slots[slot].cfg.app_map_addr;
   mgos_boot_dbg_printf("Booting slot %d (ma %p)\r\n", slot, app_vectors);
-  if ((uintptr_t) app_vectors < FLASH_BASE_ADDR ||
-      (uintptr_t) app_vectors > FLASH_BASE_ADDR + 4 * 1024 * 1024) {
+  if ((uintptr_t) app_vectors < FLASH_BASE ||
+      (uintptr_t) app_vectors > FLASH_BASE + 4 * 1024 * 1024) {
     goto out;
   }
   uint32_t sp = (uint32_t) app_vectors->sp;
   uint32_t entry = (uint32_t) app_vectors->reset;
   mgos_boot_dbg_printf("SP %p, entry: %p\r\n\r\n", app_vectors->sp,
                        app_vectors->reset);
-  if (sp < SRAM_BASE_ADDR || sp > SRAM_BASE_ADDR + 2 * 1024 * 1024 ||
+  if (sp < SRAM_BASE || sp > SRAM_BASE + 2 * 1024 * 1024 ||
       (uintptr_t) entry < (uintptr_t) app_vectors ||
-      entry > FLASH_BASE_ADDR + 4 * 1024 * 1024) {
+      entry > FLASH_BASE + 4 * 1024 * 1024) {
     goto out;
   }
   SCB->VTOR = (uint32_t) app_vectors;

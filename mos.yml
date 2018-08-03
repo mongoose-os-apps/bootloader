@@ -25,6 +25,7 @@ build_vars:
   # These parameters defien boot loader configuration for a specific board.
   DEVICE: stm32f412rg
   MGOS_DEBUG_UART: 6
+  FLASH_BL_SIZE: 32768
   FLASH_BLC_SIZE: 32768
 
 libs:

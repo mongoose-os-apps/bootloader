@@ -80,7 +80,7 @@ bool mgos_boot_devs_init(void) {
     goto out;
   }
 
-  uint32_t app_size = (FLASH_SIZE - APP0_OFFSET);
+  uint32_t app_size = (STM32_FLASH_SIZE - APP0_OFFSET);
   app0_dev = mgos_vfs_dev_create(MGOS_VFS_DEV_TYPE_STM32_FLASH, NULL);
   if (stm32_flash_dev_init(app0_dev, APP0_OFFSET, app_size, false /* ese */) !=
           0 ||
@@ -152,7 +152,7 @@ void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
   strcpy(sc->app_dev, STM32_BOOT_APP_DEV_0);
   strcpy(sc->fs_dev, STM32_BOOT_FS_DEV_0);
   sc->flags = MGOS_BOOT_SLOT_F_VALID | MGOS_BOOT_SLOT_F_WRITEABLE;
-  sc->app_map_addr = FLASH_BASE_ADDR + APP0_OFFSET;
+  sc->app_map_addr = FLASH_BASE + APP0_OFFSET;
   ss->app_org = sc->app_map_addr; /* Directly bootable */
   /* Note: we don't know the actual length of the FW. */
   ss->app_len = mgos_vfs_dev_get_size(app0_dev);
