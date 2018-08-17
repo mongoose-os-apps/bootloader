@@ -9,7 +9,7 @@ _stack = SRAM_BASE_ADDR + SRAM_SIZE;
 _stack_size = 0x4000;
 
 MEMORY {
-  FLASH_BL (rx)  : ORIGIN = FLASH_BASE_ADDR, LENGTH = FLASH_BL_SIZE
+  FLASH_BL (rx)  : ORIGIN = FLASH_BASE_ADDR, LENGTH = FLASH_BL_SIZE - 8 /* for init flag */
   SRAM     (rwx) : ORIGIN = SRAM_BASE_ADDR,  LENGTH = SRAM_SIZE
 }
 

@@ -21,7 +21,6 @@
 #include "common/cs_crc32.h"
 #include "common/str_util.h"
 
-#include "mgos_spi.h"
 #include "mgos_system.h"
 #include "mgos_uart.h"
 #include "mgos_utils.h"
@@ -49,9 +48,9 @@ void mgos_runlock(struct mgos_rlock_type *l)
 void mgos_rlock_destroy(struct mgos_rlock_type *l)
     __attribute__((alias("mgos_rlock")));
 
-void mgos_ints_enable(void) {
+IRAM void mgos_ints_enable(void) {
 }
-void mgos_ints_disable(void) __attribute__((alias("mgos_ints_enable")));
+IRAM void mgos_ints_disable(void) __attribute__((alias("mgos_ints_enable")));
 void mgos_lock(void) __attribute__((alias("mgos_ints_enable")));
 void mgos_unlock(void) __attribute__((alias("mgos_ints_enable")));
 
@@ -265,6 +264,10 @@ bool mgos_boot_slot_swap(struct mgos_boot_cfg *cfg, int a, int b) {
   return mgos_boot_slot_swap_run(cfg);
 }
 
+void mgos_cd_putc(int c) {
+  mgos_boot_dbg_putc(c);
+}
+
 void mgos_boot_main(void) {
   struct mgos_boot_cfg *cfg;
   mgos_wdt_enable();
@@ -273,8 +276,14 @@ void mgos_boot_main(void) {
   mgos_boot_dbg_printf("\r\n\r\nmOS loader %s (%s)\r\n", build_version,
                        build_id);
 
-  if (!mgos_boot_devs_init()) goto out;
-  if (!mgos_boot_cfg_init()) goto out;
+  if (!mgos_boot_devs_init()) {
+    mgos_boot_dbg_printf("%s init failed\r\n", "dev");
+    goto out;
+  }
+  if (!mgos_boot_cfg_init()) {
+    mgos_boot_dbg_printf("%s init failed\r\n", "cfg");
+    goto out;
+  }
   cfg = mgos_boot_cfg_get();
   mgos_boot_cfg_dump(cfg);
   mgos_wdt_feed();

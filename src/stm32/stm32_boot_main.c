@@ -19,6 +19,8 @@
 
 #include "mgos_boot_dbg.h"
 
+#include "stm32_flash.h"
+
 struct int_vectors {
   void *sp;
   void (*reset)(void);
@@ -44,17 +46,20 @@ void exc_handler2(void) {
 
 extern uint32_t _stack;
 extern void stm32_entry(void);
+extern void arm_exc_handler_top(void);
 
 /* We don't use interrupts so we can get away with just two entries */
 const __attribute__((section(".flash_int_vectors_boot"))) struct int_vectors
     boot_vectors = {
         .sp = &_stack,
         .reset = stm32_entry,
-        .nmi = exc_handler,
-        .hard_fault = exc_handler2,
-        .mem_manage_fault = exc_handler,
-        .bus_fault = exc_handler,
-        .usage_fault = exc_handler,
+#if 1
+        .nmi = arm_exc_handler_top,
+        .hard_fault = arm_exc_handler_top,
+        .mem_manage_fault = arm_exc_handler_top,
+        .bus_fault = arm_exc_handler_top,
+        .usage_fault = arm_exc_handler_top,
+#endif
 };
 
 void mgos_boot_app(const struct mgos_boot_cfg *cfg, int slot) {
@@ -69,7 +74,7 @@ void mgos_boot_app(const struct mgos_boot_cfg *cfg, int slot) {
   uint32_t entry = (uint32_t) app_vectors->reset;
   mgos_boot_dbg_printf("SP %p, entry: %p\r\n\r\n", app_vectors->sp,
                        app_vectors->reset);
-  if (sp < SRAM_BASE || sp > SRAM_BASE + 2 * 1024 * 1024 ||
+  if (sp < SRAM_BASE_ADDR || sp > SRAM_BASE_ADDR + 2 * 1024 * 1024 ||
       (uintptr_t) entry < (uintptr_t) app_vectors ||
       entry > FLASH_BASE + 4 * 1024 * 1024) {
     goto out;
@@ -86,10 +91,21 @@ out:
   mgos_boot_dbg_putl("Invalid!");
 }
 
+/*
+ * Use last 8 bytes of the boot loader area to keep the "already inited" flag.
+ * 8 bytes to satisfy STM32L4 flash write 64-bit alignment requirement.
+ */
+bool mgos_boot_cfg_should_write_default(void) {
+  uint32_t buf[2] = {MGOS_BOOT_CFG_MAGIC, MGOS_BOOT_CFG_MAGIC};
+  const uint32_t *pf = (uint32_t *) (FLASH_BASE + STM32_FLASH_BL_SIZE - 8);
+  if (memcmp(pf, buf, sizeof(buf)) == 0) return false;
+  stm32_flash_write_region(STM32_FLASH_BL_SIZE - 8, 8, buf);
+  return true;
+}
+
 int main() {
 #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2)); /* Enabled FPU */
 #endif
-  RCC->CIR = 0; /* Disable interrupts */
   mgos_boot_main();
 }

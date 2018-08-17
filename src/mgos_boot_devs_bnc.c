@@ -1,3 +1,4 @@
+#if 0
 /*
  * Copyright (c) 2014-2018 Cesanta Software Limited
  * All rights reserved
@@ -176,3 +177,4 @@ void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
   cfg->slots[1].state.app_len = mgos_vfs_dev_get_size(app0_dev);
 #endif
 }
+#endif

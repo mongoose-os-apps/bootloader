@@ -1,6 +1,6 @@
 author: mongoose-os
 description: Mongoose OS boot loader
-version: 1.0.0
+version: 1.2.0
 
 # Currently only STM32 is supported but platform-specific parts are isolated
 # and the plan is to use it more widely.
@@ -15,24 +15,26 @@ sources:
   - src/${platform}
 
 cdefs:
+  JSON_MINIMAL: 1
+  JSON_ENABLE_ARRAY: 0
   CS_ENABLE_STDIO: 0
   MGOS_BOOT_BUILD: 1
-  APP0_OFFSET: 64*1024
+  MGOS_ENABLE_CORE_DUMP: 0
+  APP0_OFFSET: 65536
 
-build_vars:
-  STM32_LIBC: -lc_nano
-  LD_SCRIPT: ld/mgos_boot_stm32.ld
-  # These parameters defien boot loader configuration for a specific board.
-  DEVICE: stm32f412rg
-  MGOS_DEBUG_UART: 6
-  FLASH_BL_SIZE: 32768
-  FLASH_BLC_SIZE: 32768
+conds:
+  - when: mos.platform == "stm32"
+    apply:
+      build_vars:
+        MGOS_BL_BIN: ""
+        LD_SCRIPT: ld/mgos_boot_stm32.ld
+        STM32_LIBC: -lc_nano
 
 libs:
   - origin: https://github.com/mongoose-os-libs/bootloader
   - origin: https://github.com/mongoose-os-libs/vfs-dev-encr
   - origin: https://github.com/mongoose-os-libs/vfs-dev-part
+  - origin: https://github.com/mongoose-os-libs/vfs-dev-ram
   - origin: https://github.com/mongoose-os-libs/vfs-dev-spi-flash
-  - origin: https://github.com/mongoose-os-libs/vfs-dev-w25xxx
 
 manifest_version: 2018-06-20
