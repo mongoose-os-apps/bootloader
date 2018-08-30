@@ -96,7 +96,15 @@ out:
  * 8 bytes to satisfy STM32L4 flash write 64-bit alignment requirement.
  */
 bool mgos_boot_cfg_should_write_default(void) {
+#ifdef STM32L4
+  /* Because of ECC, on L4 we can only really overwrite with 0 reliably.
+   * It actually depends on whther 0xffffffff was actually overwritten
+   * or remains from last erase, in which case ECC bits are untouched
+   * and any value can be written. ECC value for 0 is 0, so writing 0 is ok. */
+  uint32_t buf[2] = {0, 0};
+#else
   uint32_t buf[2] = {MGOS_BOOT_CFG_MAGIC, MGOS_BOOT_CFG_MAGIC};
+#endif
   const uint32_t *pf = (uint32_t *) (FLASH_BASE + STM32_FLASH_BL_SIZE - 8);
   if (memcmp(pf, buf, sizeof(buf)) == 0) return false;
   stm32_flash_write_region(STM32_FLASH_BL_SIZE - 8, 8, buf);
