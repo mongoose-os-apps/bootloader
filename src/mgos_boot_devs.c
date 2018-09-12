@@ -39,7 +39,6 @@
 #define STM32_BOOT_APP_DEV_2 "app2"
 #define STM32_BOOT_FS_DEV_0 "fs0"
 #define STM32_BOOT_FS_DEV_1 "fs1"
-#define STM32_BOOT_FS_DEV_2 "fs2"
 
 extern bool mgos_vfs_dev_encr_init(void);
 extern bool mgos_vfs_dev_spi_flash_init(void);
@@ -91,6 +90,5 @@ void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
   sc = &cfg->slots[2].cfg;
   ss = &cfg->slots[2].state;
   strcpy(sc->app_dev, STM32_BOOT_APP_DEV_2);
-  strcpy(sc->fs_dev, STM32_BOOT_FS_DEV_2);
   sc->flags = MGOS_BOOT_SLOT_F_VALID | MGOS_BOOT_SLOT_F_WRITEABLE;
 }

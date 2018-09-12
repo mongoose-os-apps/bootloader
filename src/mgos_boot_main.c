@@ -182,8 +182,9 @@ bool mgos_boot_slot_swap_step(struct mgos_boot_cfg *cfg) {
                        sws->t);
   switch (sws->phase) {
     case MGOS_BOOT_SLOT_SWAP_INIT: {
-      /* Find a temp slot */
-      sws->t = mgos_boot_cfg_find_slot(cfg, 0 /* map_addr */, a, b);
+      /* Find a temp slot. We don't need FS for the swap. */
+      sws->t = mgos_boot_cfg_find_slot(cfg, 0 /* map_addr */,
+                                       false /* want_fs */, a, b);
       if (sws->t < 0) {
         mgos_boot_dbg_printf("No suitable temp slot!\r\n");
         break;
@@ -319,7 +320,8 @@ void mgos_boot_main(void) {
    */
   struct mgos_boot_slot *as = &cfg->slots[cfg->active_slot];
   if (as->cfg.app_map_addr != as->state.app_org) {
-    int bootable_slot = mgos_boot_cfg_find_slot(cfg, as->state.app_org, -1, -1);
+    int bootable_slot = mgos_boot_cfg_find_slot(cfg, as->state.app_org,
+                                                true /* want_fs */, -1, -1);
     if (bootable_slot < 0) {
       mgos_boot_dbg_printf("No slot available @ 0x%lx!\r\n",
                            (unsigned long) as->state.app_org);
