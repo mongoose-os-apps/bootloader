@@ -70,7 +70,7 @@ uint32_t mgos_boot_checksum(struct mgos_vfs_dev *src, size_t len) {
     enum mgos_vfs_dev_err r = mgos_vfs_dev_read(src, offset, io_len, io_buf);
     if (r != 0) {
       crc32 = 0;
-      mgos_boot_dbg_printf("Read err %s @ %lu: %d\r\n", src->name,
+      mgos_boot_dbg_printf("Read err %s @ %lu: %d\n", src->name,
                            (unsigned long) offset, r);
       goto out;
     }
@@ -82,14 +82,14 @@ uint32_t mgos_boot_checksum(struct mgos_vfs_dev *src, size_t len) {
   }
   res = true;
 out:
-  if (res) mgos_boot_dbg_printf(" 0x%08lx\r\n", (unsigned long) crc32);
+  if (res) mgos_boot_dbg_printf(" 0x%08lx\n", (unsigned long) crc32);
   return crc32;
 }
 
 bool mgos_boot_copy_dev(struct mgos_vfs_dev *src, struct mgos_vfs_dev *dst,
                         size_t len) {
   bool res = false;
-  uint32_t offset = 0;
+  uint32_t offset = 0, erased_until = 0;
   mgos_boot_dbg_printf("%s --> %s (%lu): ", src->name, dst->name,
                        (unsigned long) len);
   while (len > 0) {
@@ -99,22 +99,34 @@ bool mgos_boot_copy_dev(struct mgos_vfs_dev *src, struct mgos_vfs_dev *dst,
     /* Always read and write in fixed size chunks. */
     r = mgos_vfs_dev_read(src, offset, io_len, io_buf);
     if (r != 0) {
-      mgos_boot_dbg_printf("Read err %s @ %lu: %d\r\n", src->name,
+      mgos_boot_dbg_printf("Read err %s @ %lu: %d\n", src->name,
                            (unsigned long) offset, r);
       goto out;
     }
-    /*
-     * Erase is complicated. Devices have different erase sizes and some
-     * (STM32F flash) have non-uniform layout with varying sector size.
-     * Here we just try every erase size from 2K to 256K.
-     * Note that none may succeed on every iteration if offset is not aligned.
-     */
-    for (size_t erase_len = io_len; erase_len <= 256 * 1024; erase_len *= 2) {
-      if (mgos_vfs_dev_erase(dst, offset, erase_len) == 0) break;
+    if (offset + io_len > erased_until) {
+      int i = 0, j = 0;
+      size_t erase_sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES];
+      mgos_vfs_dev_get_erase_sizes(dst, erase_sizes);
+      /*
+       * Erase is complicated. Devices have different erase sizes and some
+       * (STM32F flash) have non-uniform layout with varying sector size.
+       */
+      while (i < (int) ARRAY_SIZE(erase_sizes) && erase_sizes[i] > 0 &&
+             erase_sizes[i] < len) {
+        j = i++;
+      }
+      while (j >= 0) {
+        size_t erase_size = erase_sizes[j];
+        if (mgos_vfs_dev_erase(dst, offset, erase_size) == 0) {
+          erased_until = offset + erase_size;
+          break;
+        }
+        j--;
+      }
     }
     r = mgos_vfs_dev_write(dst, offset, io_len, io_buf);
     if (r != 0) {
-      mgos_boot_dbg_printf("Write err %s @ %lu: %d\r\n", dst->name,
+      mgos_boot_dbg_printf("Write err %s @ %lu: %d\n", dst->name,
                            (unsigned long) offset, r);
       goto out;
     }
@@ -140,8 +152,7 @@ bool mgos_boot_copy_app(struct mgos_boot_cfg *cfg, int src, int dst) {
     src_app_dev = mgos_vfs_dev_open(ssc->app_dev);
     dst_app_dev = mgos_vfs_dev_open(dsc->app_dev);
     if (src_app_dev == NULL || dst_app_dev == NULL) {
-      mgos_boot_dbg_printf("Error opening %s %s\r\n", ssc->app_dev,
-                           dsc->app_dev);
+      mgos_boot_dbg_printf("Error opening %s %s\n", ssc->app_dev, dsc->app_dev);
       goto out;
     }
     if (!mgos_boot_copy_dev(src_app_dev, dst_app_dev, sss->app_len)) goto out;
@@ -163,126 +174,34 @@ out:
   return res;
 }
 
-enum mgos_boot_slot_swap_phase {
-  MGOS_BOOT_SLOT_SWAP_IDLE = 0,
-  MGOS_BOOT_SLOT_SWAP_INIT = 1,
-  MGOS_BOOT_SLOT_SWAP_COPY_AT = 2,
-  MGOS_BOOT_SLOT_SWAP_COPY_BA = 3,
-  MGOS_BOOT_SLOT_SWAP_COPY_TB = 4,
-  MGOS_BOOT_SLOT_SWAP_COMMIT = 5,
-};
-
-bool mgos_boot_slot_swap_step(struct mgos_boot_cfg *cfg) {
-  bool res = false;
-  struct mgos_boot_swap_state *sws = &cfg->swap;
-  int8_t a = sws->a, b = sws->b;
-  struct mgos_boot_slot *sa = &cfg->slots[a];
-  struct mgos_boot_slot *sb = &cfg->slots[b];
-  mgos_boot_dbg_printf("Swap %d <-> %d ph %d t %d\r\n", a, b, sws->phase,
-                       sws->t);
-  switch (sws->phase) {
-    case MGOS_BOOT_SLOT_SWAP_INIT: {
-      /* Find a temp slot. We don't need FS for the swap. */
-      sws->t = mgos_boot_cfg_find_slot(cfg, 0 /* map_addr */,
-                                       false /* want_fs */, a, b);
-      if (sws->t < 0) {
-        mgos_boot_dbg_printf("No suitable temp slot!\r\n");
-        break;
-      }
-      sws->phase = MGOS_BOOT_SLOT_SWAP_COPY_AT;
-      res = true;
-      break;
-    }
-    /* A swap with a read-only slot is effectively a copy. */
-    case MGOS_BOOT_SLOT_SWAP_COPY_AT: {
-      res = mgos_boot_copy_app(cfg, a, sws->t);
-      if (res) sws->phase = MGOS_BOOT_SLOT_SWAP_COPY_BA;
-      break;
-    }
-    case MGOS_BOOT_SLOT_SWAP_COPY_BA: {
-      if ((sa->cfg.flags & MGOS_BOOT_SLOT_F_WRITEABLE)) {
-        res = mgos_boot_copy_app(cfg, b, sws->a);
-      } else {
-        res = true;
-      }
-      if (res) sws->phase = MGOS_BOOT_SLOT_SWAP_COPY_TB;
-      break;
-    }
-    case MGOS_BOOT_SLOT_SWAP_COPY_TB: {
-      if ((sb->cfg.flags & MGOS_BOOT_SLOT_F_WRITEABLE)) {
-        res = mgos_boot_copy_app(cfg, sws->t, b);
-      } else {
-        res = true;
-      }
-      if (res) sws->phase = MGOS_BOOT_SLOT_SWAP_COMMIT;
-      break;
-    }
-    case MGOS_BOOT_SLOT_SWAP_COMMIT: {
-      char fs_dev_t[8];
-      strcpy(fs_dev_t, cfg->slots[a].cfg.fs_dev);
-      if ((sa->cfg.flags & MGOS_BOOT_SLOT_F_WRITEABLE)) {
-        strcpy(cfg->slots[a].cfg.fs_dev, cfg->slots[b].cfg.fs_dev);
-      }
-      if ((sb->cfg.flags & MGOS_BOOT_SLOT_F_WRITEABLE)) {
-        strcpy(cfg->slots[b].cfg.fs_dev, fs_dev_t);
-      }
-
-      if (cfg->active_slot == a) {
-        cfg->active_slot = b;
-      } else if (cfg->active_slot == b) {
-        cfg->active_slot = a;
-      }
-      if (cfg->revert_slot == a) {
-        cfg->revert_slot = b;
-      } else if (cfg->revert_slot == b) {
-        cfg->revert_slot = a;
-      }
-      memset(sws, 0, sizeof(*sws));
-      sws->phase = MGOS_BOOT_SLOT_SWAP_IDLE;
-      res = true;
-      break;
-    }
-    default:
-      break;
-  }
-  return res;
-}
-
-bool mgos_boot_slot_swap_run(struct mgos_boot_cfg *cfg) {
-  while (cfg->swap.phase != MGOS_BOOT_SLOT_SWAP_IDLE) {
-    if (!mgos_boot_slot_swap_step(cfg)) return false;
-    if (!mgos_boot_cfg_write(cfg, false /* dump */)) return false;
-  }
-  return true;
-}
-
-bool mgos_boot_slot_swap(struct mgos_boot_cfg *cfg, int a, int b) {
-  cfg->swap.a = a;
-  cfg->swap.b = b;
-  cfg->swap.t = -1;
-  cfg->swap.phase = MGOS_BOOT_SLOT_SWAP_INIT;
-  mgos_boot_dbg_printf("Swapping %d <-> %d\r\n", a, b);
-  return mgos_boot_slot_swap_run(cfg);
-}
-
 void mgos_cd_putc(int c) {
   mgos_boot_dbg_putc(c);
 }
+
+static void swap_fs_devs(struct mgos_boot_cfg *cfg, int8_t a, int8_t b) {
+  char temp_fs_dev[8];
+  strcpy(temp_fs_dev, cfg->slots[a].cfg.fs_dev);
+  strcpy(cfg->slots[a].cfg.fs_dev, cfg->slots[b].cfg.fs_dev);
+  strcpy(cfg->slots[b].cfg.fs_dev, temp_fs_dev);
+}
+
+extern void stm32_clock_config(void);
 
 void mgos_boot_main(void) {
   struct mgos_boot_cfg *cfg;
   mgos_wdt_enable();
   mgos_wdt_set_timeout(5 /* seconds */);
+  stm32_clock_config();
+  SystemCoreClockUpdate();
   mgos_boot_dbg_setup();
-  mgos_boot_dbg_printf("\r\n\r\nmOS loader %s (%s)\r\n", build_version,
-                       build_id);
+  mgos_boot_dbg_printf("\n\nmOS loader %s (%s)\n", build_version, build_id);
 
   if (!mgos_boot_devs_init()) {
-    mgos_boot_dbg_printf("%s init failed\r\n", "dev");
+    mgos_boot_dbg_printf("%s init failed\n", "dev");
     goto out;
   }
   if (!mgos_boot_cfg_init()) {
-    mgos_boot_dbg_printf("%s init failed\r\n", "cfg");
+    mgos_boot_dbg_printf("%s init failed\n", "cfg");
     goto out;
   }
   cfg = mgos_boot_cfg_get();
@@ -295,23 +214,20 @@ void mgos_boot_main(void) {
    * 2) Make sure the desired boot slot is bootable
    */
 
-  /* But first, finish a swap if one was underway. */
-  if (!mgos_boot_slot_swap_run(cfg)) goto out;
-
   if (!(cfg->flags & MGOS_BOOT_F_COMMITTED)) {
     if (!(cfg->flags & MGOS_BOOT_F_FIRST_BOOT_B)) {
-      mgos_boot_dbg_printf("Reboot without commit - reverting to %d\r\n",
+      mgos_boot_dbg_printf("Reboot without commit - reverting to %d\n",
                            cfg->revert_slot);
       cfg->active_slot = cfg->revert_slot;
       cfg->revert_slot = -1;
       cfg->flags |= MGOS_BOOT_F_COMMITTED;
       cfg->flags &= ~(MGOS_BOOT_F_FIRST_BOOT_A | MGOS_BOOT_F_MERGE_FS);
     } else {
-      /* This is first reboot after update, flip our flag. */
+      /* This is the first reboot after update, flip our flag. */
       cfg->flags &= ~MGOS_BOOT_F_FIRST_BOOT_B;
-      mgos_boot_dbg_printf("First boot of slot %d\r\n", cfg->active_slot);
+      mgos_boot_dbg_printf("First boot of slot %d\n", cfg->active_slot);
     }
-    if (!mgos_boot_cfg_write(cfg, true /* dump */)) goto out;
+    if (!mgos_boot_cfg_write(cfg, false /* dump */)) goto out;
   }
 
   /*
@@ -321,20 +237,47 @@ void mgos_boot_main(void) {
   struct mgos_boot_slot *as = &cfg->slots[cfg->active_slot];
   if (as->cfg.app_map_addr != as->state.app_org) {
     int bootable_slot = mgos_boot_cfg_find_slot(cfg, as->state.app_org,
-                                                true /* want_fs */, -1, -1);
+                                                false /* want_fs */, -1, -1);
+    mgos_boot_dbg_printf("Slot %d is not bootable, will use %d\n",
+                         cfg->active_slot, bootable_slot);
     if (bootable_slot < 0) {
-      mgos_boot_dbg_printf("No slot available @ 0x%lx!\r\n",
+      mgos_boot_dbg_printf("No slot available @ 0x%lx!\n",
                            (unsigned long) as->state.app_org);
       goto out;
     }
-    if (!mgos_boot_slot_swap(cfg, cfg->active_slot, bootable_slot)) goto out;
+    /* We found a bootable slot. If it is the revert slot, it is valuable
+     * and we need to make a backup of it. */
+    if (bootable_slot == cfg->revert_slot) {
+      /* Find a temp slot. We don't need FS for the swap. */
+      int8_t temp_slot =
+          mgos_boot_cfg_find_slot(cfg, 0 /* map_addr */, false /* want_fs */,
+                                  bootable_slot, cfg->revert_slot);
+      mgos_boot_dbg_printf(
+          "Slot %d contains useful data, "
+          "will make a backup of it in slot %d\n",
+          bootable_slot, temp_slot);
+      if (temp_slot < 0) {
+        mgos_boot_dbg_printf("No suitable temp slot!\n");
+        goto out;
+      }
+      if (!mgos_boot_copy_app(cfg, bootable_slot, temp_slot)) goto out;
+      cfg->revert_slot = temp_slot;
+      swap_fs_devs(cfg, temp_slot, bootable_slot);
+      /* Commit this config. This is a stable configuration and we need to
+       * preserve it in case the subsequent copy is interrupted. */
+      if (!mgos_boot_cfg_write(cfg, false /* dump */)) goto out;
+    }
+    if (!mgos_boot_copy_app(cfg, cfg->active_slot, bootable_slot)) goto out;
+    swap_fs_devs(cfg, cfg->active_slot, bootable_slot);
+    cfg->active_slot = bootable_slot;
+    if (!mgos_boot_cfg_write(cfg, true /* dump */)) goto out;
   }
 
   mgos_boot_cfg_deinit();
   mgos_boot_devs_deinit();
   mgos_boot_app(cfg, cfg->active_slot);
 out:
-  mgos_boot_dbg_printf("FAIL\r\n");
+  mgos_boot_dbg_printf("FAIL\n");
   while (1) {
   }
 }
