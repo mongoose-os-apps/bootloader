@@ -185,14 +185,10 @@ static void swap_fs_devs(struct mgos_boot_cfg *cfg, int8_t a, int8_t b) {
   strcpy(cfg->slots[b].cfg.fs_dev, temp_fs_dev);
 }
 
-extern void stm32_clock_config(void);
-
 void mgos_boot_main(void) {
   struct mgos_boot_cfg *cfg;
   mgos_wdt_enable();
   mgos_wdt_set_timeout(5 /* seconds */);
-  stm32_clock_config();
-  SystemCoreClockUpdate();
   mgos_boot_dbg_setup();
   mgos_boot_dbg_printf("\n\nmOS loader %s (%s)\n", build_version, build_id);
 

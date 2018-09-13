@@ -20,6 +20,7 @@
 #include "mgos_boot_dbg.h"
 
 #include "stm32_flash.h"
+#include "stm32_system.h"
 
 struct int_vectors {
   void *sp;
@@ -112,8 +113,8 @@ bool mgos_boot_cfg_should_write_default(void) {
 }
 
 int main() {
-#if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
-  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2)); /* Enabled FPU */
-#endif
+  stm32_system_init();
+  stm32_clock_config();
+  SystemCoreClockUpdate();
   mgos_boot_main();
 }
