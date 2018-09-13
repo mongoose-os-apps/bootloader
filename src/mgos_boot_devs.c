@@ -93,7 +93,7 @@ void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
   ss = &cfg->slots[3].state;
   strcpy(sc->app_dev, "appF");
   strcpy(sc->fs_dev, "fsF");
-  sc->flags = MGOS_BOOT_SLOT_F_VALID | MGOS_BOOT_SLOT_F_WRITEABLE;
+  sc->flags = MGOS_BOOT_SLOT_F_VALID;
 #if 0
   /* XXX - testing */
   cfg->flags = MGOS_BOOT_F_FIRST_BOOT_A | MGOS_BOOT_F_FIRST_BOOT_B | MGOS_BOOT_F_MERGE_FS;
