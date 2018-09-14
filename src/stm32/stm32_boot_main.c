@@ -40,7 +40,7 @@ void exc_handler(void) {
 
 void exc_handler2(void) {
   uint32_t hfsr = SCB->HFSR, cfsr = SCB->CFSR;
-  mgos_boot_dbg_printf("!!! H 0x%lx C 0x%lx sp %p\r\n", hfsr, cfsr, &hfsr);
+  mgos_boot_dbg_printf("!!! H 0x%lx C 0x%lx sp %p\n", hfsr, cfsr, &hfsr);
   while (1) {
   }
 }
@@ -63,33 +63,38 @@ const __attribute__((section(".flash_int_vectors_boot"))) struct int_vectors
 #endif
 };
 
-void mgos_boot_app(const struct mgos_boot_cfg *cfg, int slot) {
-  const struct int_vectors *app_vectors =
-      (const struct int_vectors *) cfg->slots[slot].cfg.app_map_addr;
-  mgos_boot_dbg_printf("Booting slot %d (ma %p)\r\n", slot, app_vectors);
-  if ((uintptr_t) app_vectors < FLASH_BASE ||
-      (uintptr_t) app_vectors > FLASH_BASE + 4 * 1024 * 1024) {
-    goto out;
+bool mgos_boot_print_app_info(uintptr_t app_org) {
+  if (app_org < FLASH_BASE || app_org > FLASH_BASE + 4 * 1024 * 1024) {
+    mgos_boot_dbg_printf("Invalid app address\n");
+    return false;
   }
+  const struct int_vectors *app_vectors = (const struct int_vectors *) app_org;
   uint32_t sp = (uint32_t) app_vectors->sp;
   uint32_t entry = (uint32_t) app_vectors->reset;
-  mgos_boot_dbg_printf("SP %p, entry: %p\r\n\r\n", app_vectors->sp,
+  mgos_boot_dbg_printf("SP %p, entry: %p\n\n\n\n", app_vectors->sp,
                        app_vectors->reset);
   if (sp < SRAM_BASE_ADDR || sp > SRAM_BASE_ADDR + 2 * 1024 * 1024 ||
       (uintptr_t) entry < (uintptr_t) app_vectors ||
       entry > FLASH_BASE + 4 * 1024 * 1024) {
-    goto out;
+    return false;
   }
-  SCB->VTOR = (uint32_t) app_vectors;
+  return true;
+}
+
+void mgos_boot_app(uintptr_t app_org) {
+  SCB->VTOR = app_org;
+  const struct int_vectors *app_vectors = (const struct int_vectors *) app_org;
+  uint32_t sp = (uint32_t) app_vectors->sp;
+  uint32_t entry = (uint32_t) app_vectors->reset;
   __asm volatile(
       "mov  sp, %0 \n"
       "bx   %1     \n"
       : /* output */
       : /* input */ "r"(sp), "r"(entry)
       : /* scratch */);
-/* Not reached */
-out:
-  mgos_boot_dbg_putl("Invalid!");
+  /* Not reached. This loop is only to satisfy the compiler. */
+  while (true) {
+  }
 }
 
 /*
@@ -112,9 +117,12 @@ bool mgos_boot_cfg_should_write_default(void) {
   return true;
 }
 
-int main() {
+void mgos_boot_init(void) {
   stm32_system_init();
   stm32_clock_config();
   SystemCoreClockUpdate();
+}
+
+int main() {
   mgos_boot_main();
 }

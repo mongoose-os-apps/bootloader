@@ -94,8 +94,8 @@ void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
   strcpy(sc->app_dev, "appF");
   strcpy(sc->fs_dev, "fsF");
   sc->flags = MGOS_BOOT_SLOT_F_VALID;
+/* Test settings */
 #if 0
-  /* XXX - testing */
   cfg->flags = MGOS_BOOT_F_FIRST_BOOT_A | MGOS_BOOT_F_FIRST_BOOT_B | MGOS_BOOT_F_MERGE_FS;
   cfg->slots[1].state.app_len = 524288;
   cfg->slots[1].state.app_org = 0x8010000;
@@ -104,5 +104,8 @@ void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
   mgos_vfs_dev_close(app1);
   cfg->active_slot = 1;
   cfg->revert_slot = 0;
+#elif 0
+  cfg->slots[2].state.app_len = 983040;
+  cfg->slots[1].state.app_org = 0x8010000;
 #endif
 }

@@ -21,6 +21,7 @@
 #include "common/cs_crc32.h"
 #include "common/str_util.h"
 
+#include "mgos_hal.h"
 #include "mgos_system.h"
 #include "mgos_uart.h"
 #include "mgos_utils.h"
@@ -61,11 +62,12 @@ static uint8_t io_buf[STM32_BOOT_IO_SIZE];
 
 uint32_t mgos_boot_checksum(struct mgos_vfs_dev *src, size_t len) {
   bool res = false;
+  size_t l = 0;
   uint32_t offset = 0, crc32 = 0;
   mgos_boot_dbg_printf("Checksum %s (%lu): ", src->name, (unsigned long) len);
-  while (len > 0) {
+  while (l < len) {
     size_t io_len = sizeof(io_buf);
-    size_t data_len = MIN(len, io_len);
+    size_t data_len = MIN(len - l, io_len);
     /* Always read in fixed size chunks. */
     enum mgos_vfs_dev_err r = mgos_vfs_dev_read(src, offset, io_len, io_buf);
     if (r != 0) {
@@ -77,8 +79,8 @@ uint32_t mgos_boot_checksum(struct mgos_vfs_dev *src, size_t len) {
     crc32 = cs_crc32(crc32, io_buf, data_len);
     mgos_wdt_feed();
     offset += data_len;
-    len -= data_len;
-    if (len % 65536 == 0) mgos_boot_dbg_putc('.');
+    l += data_len;
+    if (l % 65536 == 0) mgos_boot_dbg_putc('.');
   }
   res = true;
 out:
@@ -89,13 +91,14 @@ out:
 bool mgos_boot_copy_dev(struct mgos_vfs_dev *src, struct mgos_vfs_dev *dst,
                         size_t len) {
   bool res = false;
+  size_t l = 0;
   uint32_t offset = 0, erased_until = 0;
   mgos_boot_dbg_printf("%s --> %s (%lu): ", src->name, dst->name,
                        (unsigned long) len);
-  while (len > 0) {
+  while (l < len) {
     enum mgos_vfs_dev_err r;
     size_t io_len = sizeof(io_buf);
-    size_t data_len = MIN(len, io_len);
+    size_t data_len = MIN(len - l, io_len);
     /* Always read and write in fixed size chunks. */
     r = mgos_vfs_dev_read(src, offset, io_len, io_buf);
     if (r != 0) {
@@ -132,8 +135,8 @@ bool mgos_boot_copy_dev(struct mgos_vfs_dev *src, struct mgos_vfs_dev *dst,
     }
     mgos_wdt_feed();
     offset += data_len;
-    len -= data_len;
-    if (len % 65536 == 0) mgos_boot_dbg_putc('.');
+    l += data_len;
+    if (l % 65536 == 0) mgos_boot_dbg_putc('.');
   }
   res = true;
 out:
@@ -188,9 +191,18 @@ static void swap_fs_devs(struct mgos_boot_cfg *cfg, int8_t a, int8_t b) {
 void mgos_boot_main(void) {
   struct mgos_boot_cfg *cfg;
   mgos_wdt_enable();
-  mgos_wdt_set_timeout(5 /* seconds */);
+  mgos_wdt_set_timeout(10 /* seconds */);
+  {
+    uintptr_t app_org = mgos_boot_get_next_app_org();
+    if (app_org != 0) {
+      mgos_boot_set_next_app_org(0);
+      mgos_boot_app(app_org);
+    }
+    mgos_boot_init();
+  }
   mgos_boot_dbg_setup();
-  mgos_boot_dbg_printf("\n\nmOS loader %s (%s)\n", build_version, build_id);
+  mgos_boot_dbg_printf("\n\nMongoose OS loader %s (%s)\n", build_version,
+                       build_id);
 
   if (!mgos_boot_devs_init()) {
     mgos_boot_dbg_printf("%s init failed\n", "dev");
@@ -269,9 +281,27 @@ void mgos_boot_main(void) {
     if (!mgos_boot_cfg_write(cfg, true /* dump */)) goto out;
   }
 
+  /* cfg->active_slot may have changed. */
+  as = &cfg->slots[cfg->active_slot];
+
+  /* Verify app checksum. */
+  struct mgos_vfs_dev *app_dev = mgos_vfs_dev_open(as->cfg.app_dev);
+  uint32_t app_crc32 = mgos_boot_checksum(app_dev, as->state.app_len);
+  mgos_vfs_dev_close(app_dev);
+  if (app_crc32 != as->state.app_crc32) {
+    mgos_boot_dbg_printf("App CRC mismatch!\n");
+    goto out;
+  }
+
   mgos_boot_cfg_deinit();
   mgos_boot_devs_deinit();
-  mgos_boot_app(cfg, cfg->active_slot);
+  uintptr_t app_org = cfg->slots[cfg->active_slot].state.app_org;
+  mgos_boot_dbg_printf("Booting slot %d (%p)\r\n", cfg->active_slot,
+                       (void *) app_org);
+  mgos_boot_print_app_info(app_org);
+  mgos_boot_set_next_app_org(app_org);
+  mgos_dev_system_restart();
+
 out:
   mgos_boot_dbg_printf("FAIL\n");
   while (1) {

@@ -23,8 +23,23 @@
 extern "C" {
 #endif
 
+/*
+ * Platform code should initialize .bss, .data and heap and
+ * invoke mgos_boot_main. Do not touch any peripherals.
+ */
 void mgos_boot_main(void);
-void mgos_boot_app(const struct mgos_boot_cfg *cfg, int slot);
+/*
+ * mgos_boot_init should perform basic CPU init, set decent clock speed.
+ */
+void mgos_boot_init(void);
+
+bool mgos_boot_print_app_info(uintptr_t app_org);
+
+/*
+ * mgos_boot_app should perform platform-specific actions to boot
+ * the specified app.
+ */
+void mgos_boot_app(uintptr_t app_org) __attribute__((noreturn));
 
 #ifdef __cplusplus
 }
