@@ -31,6 +31,7 @@ conds:
         STM32_LIBC: -lc_nano
 
 libs:
+  - origin: https://github.com/mongoose-os-libs/boards
   - origin: https://github.com/mongoose-os-libs/bootloader
   - origin: https://github.com/mongoose-os-libs/vfs-dev-encr
   - origin: https://github.com/mongoose-os-libs/vfs-dev-part
