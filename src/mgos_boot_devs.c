@@ -43,9 +43,7 @@ bool mgos_boot_devs_init(void) {
   bool res = false;
 
   stm32_vfs_dev_flash_register_type();
-  mgos_vfs_dev_encr_init();
   mgos_vfs_dev_part_init();
-  mgos_vfs_dev_ram_init();
   mgos_vfs_dev_spi_flash_init();
 
   res = mgos_root_devtab_init();
