@@ -60,6 +60,10 @@ extern const struct mgos_vfs_dev_ops mgos_vfs_dev_w25xxx_ops;
 
 static uint8_t io_buf[STM32_BOOT_IO_SIZE];
 
+void mgos_usleep(uint32_t usecs) {
+  (*mgos_nsleep100)(usecs * 10);
+}
+
 uint32_t mgos_boot_checksum(struct mgos_vfs_dev *src, size_t len) {
   bool res = false;
   size_t l = 0;
