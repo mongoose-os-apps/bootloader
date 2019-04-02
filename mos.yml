@@ -1,6 +1,6 @@
 author: mongoose-os
 description: Mongoose OS boot loader
-version: 1.4.1
+version: 1.4.2
 
 # Currently only STM32 is supported but platform-specific parts are isolated
 # and the plan is to use it more widely.

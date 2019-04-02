@@ -51,7 +51,8 @@ void mgos_rlock_destroy(struct mgos_rlock_type *l)
 
 IRAM void mgos_ints_enable(void) {
 }
-IRAM void mgos_ints_disable(void) __attribute__((alias("mgos_ints_enable")));
+IRAM void mgos_ints_disable(void) {
+}
 void mgos_lock(void) __attribute__((alias("mgos_ints_enable")));
 void mgos_unlock(void) __attribute__((alias("mgos_ints_enable")));
 

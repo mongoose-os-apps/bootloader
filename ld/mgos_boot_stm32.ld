@@ -64,8 +64,9 @@ SECTIONS {
 
   .data : {
     _data_start = .;
+    *(.RamFunc)
+    *(SORT(.rodata.IRAM.*) SORT(.text.IRAM.*))
     *(.data SORT(.data.*))
-    *(.RamFunc SORT(.RamFunc.*))
     _data_end = .;
   } > SRAM AT > FLASH_BL
   _data_flash_start = LOADADDR(.data);
