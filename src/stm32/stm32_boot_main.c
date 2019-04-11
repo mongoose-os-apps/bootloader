@@ -73,7 +73,8 @@ bool mgos_boot_print_app_info(uintptr_t app_org) {
   uint32_t entry = (uint32_t) app_vectors->reset;
   mgos_boot_dbg_printf("SP %p, entry: %p\n\n\n\n", app_vectors->sp,
                        app_vectors->reset);
-  if (sp < SRAM_BASE_ADDR || sp > SRAM_BASE_ADDR + 2 * 1024 * 1024 ||
+  if (sp < STM32_SRAM_BASE_ADDR ||
+      sp > STM32_SRAM_BASE_ADDR + 2 * 1024 * 1024 ||
       (uintptr_t) entry < (uintptr_t) app_vectors ||
       entry > FLASH_BASE + 4 * 1024 * 1024) {
     return false;
