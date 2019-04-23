@@ -22,15 +22,13 @@
 #include "common/str_util.h"
 
 #include "mgos_hal.h"
-#include "mgos_system.h"
 #include "mgos_uart.h"
 #include "mgos_utils.h"
 #include "mgos_vfs_dev.h"
 
-#include "mgos_boot.h"
 #include "mgos_boot_cfg.h"
 #include "mgos_boot_dbg.h"
-#include "mgos_boot_devs.h"
+#include "mgos_boot_hal.h"
 
 /* This size is chosen to suit AES alignment and size and also
  * to match NAND flash page size. */
@@ -56,8 +54,7 @@ IRAM void mgos_ints_disable(void) {
 void mgos_lock(void) __attribute__((alias("mgos_ints_enable")));
 void mgos_unlock(void) __attribute__((alias("mgos_ints_enable")));
 
-extern const struct mgos_vfs_dev_ops mgos_vfs_dev_encr_ops;
-extern const struct mgos_vfs_dev_ops mgos_vfs_dev_w25xxx_ops;
+extern bool mgos_root_devtab_init(void);
 
 static uint8_t io_buf[STM32_BOOT_IO_SIZE];
 
@@ -197,20 +194,28 @@ void mgos_boot_main(void) {
   struct mgos_boot_cfg *cfg;
   mgos_wdt_enable();
   mgos_wdt_set_timeout(10 /* seconds */);
-  {
-    uintptr_t app_org = mgos_boot_get_next_app_org();
-    if (app_org != 0) {
-      mgos_boot_set_next_app_org(0);
-      mgos_boot_app(app_org);
-    }
-    mgos_boot_init();
+
+  mgos_boot_early_init();
+
+  uintptr_t next_app_org = mgos_boot_get_next_app_org();
+  if (next_app_org != 0) {
+    mgos_boot_set_next_app_org(0);
+    mgos_boot_app(next_app_org);
+    // Not reached.
+    goto out;
   }
+
+  mgos_boot_init();
   mgos_boot_dbg_setup();
   mgos_boot_dbg_printf("\n\nMongoose OS loader %s (%s)\n", build_version,
                        build_id);
 
   if (!mgos_boot_devs_init()) {
     mgos_boot_dbg_printf("%s init failed\n", "dev");
+    goto out;
+  }
+  if (!mgos_root_devtab_init()) {
+    mgos_boot_dbg_printf("%s init failed\n", "devtab");
     goto out;
   }
   if (!mgos_boot_cfg_init()) {
@@ -299,13 +304,14 @@ void mgos_boot_main(void) {
   }
 
   mgos_boot_cfg_deinit();
-  mgos_boot_devs_deinit();
   uintptr_t app_org = cfg->slots[cfg->active_slot].state.app_org;
   mgos_boot_dbg_printf("Booting slot %d (%p)\r\n", cfg->active_slot,
                        (void *) app_org);
   mgos_boot_print_app_info(app_org);
   mgos_boot_set_next_app_org(app_org);
-  mgos_dev_system_restart();
+  next_app_org = mgos_boot_get_next_app_org();
+  mgos_boot_system_restart();
+// Not reached.
 
 out:
   mgos_boot_dbg_printf("FAIL\n");

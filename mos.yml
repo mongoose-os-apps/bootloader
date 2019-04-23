@@ -1,14 +1,12 @@
 author: mongoose-os
 description: Mongoose OS boot loader
-version: 1.4.2
+version: 1.5.0
 
-# Currently only STM32 is supported but platform-specific parts are isolated
-# and the plan is to use it more widely.
-platform: stm32
-
-# This is a vary special "app" in that it overrides everything starting from the main function.
+# This is a very special "app" in that it overrides everything starting from the main function.
 # Essentially, we leverage the build infrastructure provided by mos but use none of the runtime,
 # carefully selecting bits we need ourselves.
+
+platforms: [ rs14100, stm32 ]
 
 sources:
   - src
@@ -20,20 +18,34 @@ cdefs:
   CS_ENABLE_STDIO: 0
   MGOS_BOOT_BUILD: 1
   MGOS_ENABLE_CORE_DUMP: 0
-  APP0_OFFSET: 65536
 
 conds:
+  - when: mos.platform == "rs14100"
+    apply:
+      build_vars:
+        MGOS_BL_BIN: ""
+        APP_SLOT_SIZE: 49152
+        RS14100_LIBC: -lc_nano
+        MGOS_ROOT_FS_SIZE: 0
+      cdefs:
+        MGOS_BOOT_APP0_OFFSET: 0x100000
+        MGOS_BOOT_APP1_OFFSET: 0x200000
+        MGOS_BOOT_APPF_OFFSET: 0x300000
+
   - when: mos.platform == "stm32"
     apply:
       build_vars:
         MGOS_BL_BIN: ""
         LD_SCRIPT: ld/mgos_boot_stm32.ld
         STM32_LIBC: -lc_nano
+      cdefs:
+        APP0_OFFSET: 65536
+      libs:
+        - origin: https://github.com/mongoose-os-libs/vfs-dev-spi-flash
 
 libs:
   - origin: https://github.com/mongoose-os-libs/boards
   - origin: https://github.com/mongoose-os-libs/bootloader
   - origin: https://github.com/mongoose-os-libs/vfs-dev-part
-  - origin: https://github.com/mongoose-os-libs/vfs-dev-spi-flash
 
 manifest_version: 2018-06-20

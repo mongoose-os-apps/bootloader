@@ -15,12 +15,93 @@
  * limitations under the License.
  */
 
-#include "mgos_boot.h"
+#include "mgos_boot_hal.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
+
+#include "common/str_util.h"
+
+#include "mgos_boot_cfg.h"
 #include "mgos_boot_dbg.h"
+#include "mgos_hal.h"
+#include "mgos_vfs_dev_part.h"
+#include "mgos_vfs_dev_spi_flash.h"
 
 #include "stm32_flash.h"
 #include "stm32_system.h"
+#include "stm32_uart_internal.h"
+#include "stm32_vfs_dev_flash.h"
+
+bool mgos_boot_dbg_setup(void) {
+  struct mgos_uart_config cfg;
+  mgos_uart_config_set_defaults(MGOS_DEBUG_UART, &cfg);
+  cfg.baud_rate = MGOS_DEBUG_UART_BAUD_RATE;
+  return mgos_uart_configure(MGOS_DEBUG_UART, &cfg);
+}
+
+void mgos_boot_dbg_putc(char c) {
+  stm32_uart_putc(MGOS_DEBUG_UART, c);
+}
+
+bool mgos_boot_devs_init(void) {
+  return (stm32_vfs_dev_flash_register_type() &&
+          mgos_vfs_dev_part_init() &&
+          mgos_vfs_dev_spi_flash_init());
+}
+
+extern uint32_t mgos_boot_checksum(struct mgos_vfs_dev *src, size_t len);
+
+void mgos_boot_cfg_set_default_slots(struct mgos_boot_cfg *cfg) {
+  struct mgos_boot_slot_cfg *sc;
+  struct mgos_boot_slot_state *ss;
+  struct mgos_vfs_dev *app0_dev = mgos_vfs_dev_open("app0");
+  /* Create app0 in a committed state. */
+  cfg->num_slots = 4;
+  /* Slot 0 */
+  sc = &cfg->slots[0].cfg;
+  ss = &cfg->slots[0].state;
+  strcpy(sc->app_dev, "app0");
+  strcpy(sc->fs_dev, "fs0");
+  sc->flags = MGOS_BOOT_SLOT_F_VALID | MGOS_BOOT_SLOT_F_WRITEABLE;
+  sc->app_map_addr = FLASH_BASE + MGOS_BOOT_APP0_OFFSET;
+  ss->app_org = sc->app_map_addr; /* Directly bootable */
+  /* Note: we don't know the actual length of the FW. */
+  ss->app_len = mgos_vfs_dev_get_size(app0_dev);
+  ss->app_crc32 = mgos_boot_checksum(app0_dev, ss->app_len);
+  /* Slot 1 - on SPI flash, not mappable. */
+  sc = &cfg->slots[1].cfg;
+  ss = &cfg->slots[1].state;
+  strcpy(sc->app_dev, "app1");
+  strcpy(sc->fs_dev, "fs1");
+  sc->flags = MGOS_BOOT_SLOT_F_VALID | MGOS_BOOT_SLOT_F_WRITEABLE;
+  /* Slot 2 - on SPI flash, not mappable, no fs.
+   * Only serves as a temp slot for swaps. */
+  sc = &cfg->slots[2].cfg;
+  ss = &cfg->slots[2].state;
+  strcpy(sc->app_dev, "appT");
+  sc->flags = MGOS_BOOT_SLOT_F_VALID | MGOS_BOOT_SLOT_F_WRITEABLE;
+  /* Slot 3 - factory reset slot on SPI flash. Not writeable. */
+  sc = &cfg->slots[3].cfg;
+  ss = &cfg->slots[3].state;
+  strcpy(sc->app_dev, "appF");
+  strcpy(sc->fs_dev, "fsF");
+  sc->flags = MGOS_BOOT_SLOT_F_VALID;
+/* Test settings */
+#if 0
+  cfg->flags = MGOS_BOOT_F_FIRST_BOOT_A | MGOS_BOOT_F_FIRST_BOOT_B | MGOS_BOOT_F_MERGE_FS;
+  cfg->slots[1].state.app_len = 524288;
+  cfg->slots[1].state.app_org = 0x8010000;
+  struct mgos_vfs_dev *app1 = mgos_vfs_dev_open(cfg->slots[1].cfg.app_dev);
+  cfg->slots[1].state.app_crc32 = mgos_boot_checksum(app1, cfg->slots[1].state.app_len);
+  mgos_vfs_dev_close(app1);
+  cfg->active_slot = 1;
+  cfg->revert_slot = 0;
+#elif 0
+  cfg->slots[2].state.app_len = 983040;
+  cfg->slots[1].state.app_org = 0x8010000;
+#endif
+}
 
 struct int_vectors {
   void *sp;
@@ -54,13 +135,11 @@ const __attribute__((section(".flash_int_vectors_boot"))) struct int_vectors
     boot_vectors = {
         .sp = &_stack,
         .reset = stm32_entry,
-#if 1
         .nmi = arm_exc_handler_top,
         .hard_fault = arm_exc_handler_top,
         .mem_manage_fault = arm_exc_handler_top,
         .bus_fault = arm_exc_handler_top,
         .usage_fault = arm_exc_handler_top,
-#endif
 };
 
 bool mgos_boot_print_app_info(uintptr_t app_org) {
@@ -71,7 +150,7 @@ bool mgos_boot_print_app_info(uintptr_t app_org) {
   const struct int_vectors *app_vectors = (const struct int_vectors *) app_org;
   uint32_t sp = (uint32_t) app_vectors->sp;
   uint32_t entry = (uint32_t) app_vectors->reset;
-  mgos_boot_dbg_printf("SP %p, entry: %p\n\n\n\n", app_vectors->sp,
+  mgos_boot_dbg_printf("SP %p, entry: %p\r\n", app_vectors->sp,
                        app_vectors->reset);
   if (sp < STM32_SRAM_BASE_ADDR ||
       sp > STM32_SRAM_BASE_ADDR + 2 * 1024 * 1024 ||
@@ -118,12 +197,20 @@ bool mgos_boot_cfg_should_write_default(void) {
   return true;
 }
 
+void mgos_boot_early_init(void) {
+}
+
+void mgos_boot_system_restart(void) {
+  mgos_dev_system_restart();
+}
+
 void mgos_boot_init(void) {
   stm32_system_init();
   stm32_clock_config();
   SystemCoreClockUpdate();
 }
 
-int main() {
+int main(void) {
   mgos_boot_main();
+  return 0;
 }
