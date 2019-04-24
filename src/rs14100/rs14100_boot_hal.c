@@ -73,16 +73,15 @@ void mgos_boot_app(uintptr_t app_org) {
 }
 
 extern void rs14100_clock_config(uint32_t cpu_freq);
-extern void rs14100_qspi_clock_config(void);
-extern void rs14100_enable_icache(void);
+extern void (*mgos_nsleep100)(uint32_t n);
+extern void mgos_nsleep100_impl(uint32_t n);
+extern uint32_t mgos_nsleep100_loop_count;
 
 void mgos_boot_init(void) {
   SystemInit();
-  // RSI_CLK_M4ssRefClkConfig(M4CLK, ULP_32MHZ_RC_CLK);
-  rs14100_clock_config(64000000);
-  rs14100_enable_icache();
-  // SystemCoreClockUpdate();
-  // rs14100_qspi_clock_config();
+  rs14100_clock_config(180000000);
+  mgos_nsleep100 = mgos_nsleep100_impl;
+  mgos_nsleep100_loop_count = 18;
 }
 
 bool mgos_boot_devs_init(void) {
