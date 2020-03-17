@@ -203,7 +203,21 @@ void mgos_boot_system_restart(void) {
   mgos_dev_system_restart();
 }
 
+extern struct mgos_boot_state g_boot_state;
+
 void mgos_boot_init(void) {
+#ifdef PWR_CSR_SBF  // F2, F4
+  g_boot_state.pwr_sr1 = PWR->CSR;
+  g_boot_state.pwr_sr2 = 0;
+#endif
+#ifdef PWR_CSR1_SBF  // F7
+  g_boot_state.pwr_sr1 = PWR->CSR1;
+  g_boot_state.pwr_sr2 = PWR->CSR2;
+#endif
+#ifdef PWR_SR1_SBF  // L4
+  g_boot_state.pwr_sr1 = PWR->SR1;
+  g_boot_state.pwr_sr2 = PWR->SR2;
+#endif
   stm32_system_init();
   stm32_clock_config();
   SystemCoreClockUpdate();
