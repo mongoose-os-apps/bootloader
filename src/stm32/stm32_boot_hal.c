@@ -45,8 +45,7 @@ void mgos_boot_dbg_putc(char c) {
 }
 
 bool mgos_boot_devs_init(void) {
-  return (stm32_vfs_dev_flash_register_type() &&
-          mgos_vfs_dev_part_init() &&
+  return (stm32_vfs_dev_flash_register_type() && mgos_vfs_dev_part_init() &&
           mgos_vfs_dev_spi_flash_init());
 }
 
@@ -131,15 +130,15 @@ extern void stm32_entry(void);
 extern void arm_exc_handler_top(void);
 
 /* We don't use interrupts so we can get away with just two entries */
-const __attribute__((section(".flash_int_vectors_boot"))) struct int_vectors
-    boot_vectors = {
-        .sp = &_stack,
-        .reset = stm32_entry,
-        .nmi = arm_exc_handler_top,
-        .hard_fault = arm_exc_handler_top,
-        .mem_manage_fault = arm_exc_handler_top,
-        .bus_fault = arm_exc_handler_top,
-        .usage_fault = arm_exc_handler_top,
+const __attribute__((
+    section(".flash_int_vectors_boot"))) struct int_vectors boot_vectors = {
+    .sp = &_stack,
+    .reset = stm32_entry,
+    .nmi = arm_exc_handler_top,
+    .hard_fault = arm_exc_handler_top,
+    .mem_manage_fault = arm_exc_handler_top,
+    .bus_fault = arm_exc_handler_top,
+    .usage_fault = arm_exc_handler_top,
 };
 
 bool mgos_boot_print_app_info(uintptr_t app_org) {

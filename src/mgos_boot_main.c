@@ -311,7 +311,7 @@ void mgos_boot_main(void) {
   mgos_boot_set_next_app_org(app_org);
   next_app_org = mgos_boot_get_next_app_org();
   mgos_boot_system_restart();
-// Not reached.
+  // Not reached.
 
 out:
   mgos_boot_dbg_printf("FAIL\n");
