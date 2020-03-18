@@ -64,6 +64,8 @@ SECTIONS {
 
   .data : {
     _data_start = .;
+    . = ALIGN(256);  /* Vectors must be aligned to 0x100 */
+    KEEP(*(.ram_int_vectors))
     *(.RamFunc)
     *(SORT(.rodata.IRAM.*) SORT(.text.IRAM.*))
     *(.data SORT(.data.*))

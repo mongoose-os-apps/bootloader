@@ -224,6 +224,7 @@ void mgos_boot_init(void) {
 }
 
 int main(void) {
+  stm32_setup_int_vectors();
   mgos_boot_main();
   return 0;
 }
