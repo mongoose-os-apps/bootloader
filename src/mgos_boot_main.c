@@ -206,6 +206,7 @@ void mgos_boot_main(void) {
   }
 
   mgos_boot_init();
+  mgos_wdt_set_timeout(10 /* seconds */); // Reinit in case clock changed.
   mgos_boot_dbg_setup();
   mgos_boot_dbg_printf("\n\nMongoose OS loader %s (%s)\n", build_version,
                        build_id);

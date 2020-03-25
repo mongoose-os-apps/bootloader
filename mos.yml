@@ -1,6 +1,6 @@
 author: mongoose-os
 description: Mongoose OS boot loader
-version: 1.6.0
+version: 1.6.1
 
 # This is a very special "app" in that it overrides everything starting from the main function.
 # Essentially, we leverage the build infrastructure provided by mos but use none of the runtime,
